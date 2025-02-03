@@ -1,0 +1,153 @@
+---
+title: "assignment 1 - 1005"
+format: html
+editor: visual
+---
+
+## Global temperature
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+# Global Temperature
+
+rm(list=ls())
+
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(zoo)
+```
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+
+df_low_troposphere <- read_table2("http://vortex.nsstc.uah.edu/data/msu/v6.1/tlt/uahncdc_lt_6.1.txt")
+
+# modified data from class
+df_low_troposphere <- df_low_troposphere[1:which(df_low_troposphere$Year %in% "Year")-1, ]
+
+df_low_troposphere <- df_low_troposphere %>%
+  mutate(
+    Date = ymd(paste(Year, Mo, 1, sep = "-")),
+    Year = year(Date),
+    Month = month(Date),
+    Month2 = month(Date, label = TRUE, abbr = FALSE)
+  ) %>%
+  select(Year, Month, Month2, Date, Globe) %>%
+  mutate_if(is.character, as.numeric) %>%
+  mutate(
+    Mean_ltroposphere = rollmean(Globe, k = 12, align = "right", fill = NA),
+    Mean_ltroposphere = round(Mean_ltroposphere, 3)
+  )
+
+tail(df_low_troposphere) # checking if the unnecessary data is removed
+```
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+
+df_mid_troposphere <- read_table2("http://vortex.nsstc.uah.edu/data/msu/v6.1/tmt/uahncdc_mt_6.1.txt")
+
+df_mid_troposphere <- df_mid_troposphere[1:which(df_mid_troposphere$Year %in% "Year")-1, ]
+
+df_mid_troposphere <- df_mid_troposphere %>%
+  mutate(
+    Date = ymd(paste(Year, Mo, 1, sep = "-")),
+    Year = year(Date),
+    Month = month(Date),
+    Month2 = month(Date, label = TRUE, abbr = FALSE)
+  ) %>%
+  select(Year, Month, Month2, Date, Globe) %>%
+  mutate_if(is.character, as.numeric) %>%
+  mutate(
+    Mean_mtroposphere = rollmean(Globe, k = 12, align = "right", fill = NA),
+    Mean_mtroposphere = round(Mean_mtroposphere, 3)
+  )
+tail(df_mid_troposphere)
+```
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+
+df_tropopause <- read_table2("http://vortex.nsstc.uah.edu/data/msu/v6.1/ttp/uahncdc_tp_6.1.txt")
+
+df_tropopause <- df_tropopause[1:which(df_tropopause$Year %in% "Year")-1, ]
+
+df_tropopause <- df_tropopause %>%
+  mutate(
+    Date = ymd(paste(Year, Mo, 1, sep = "-")),
+    Year = year(Date),
+    Month = month(Date),
+    Month2 = month(Date, label = TRUE, abbr = FALSE)
+  ) %>%
+  select(Year, Month, Month2, Date, Globe) %>%
+  mutate_if(is.character, as.numeric) %>%
+  mutate(
+    Mean_tropopause = rollmean(Globe, k = 12, align = "right", fill = NA),
+    Mean_tropopause = round(Mean_tropopause, 3)
+  )
+tail(df_tropopause)
+```
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+
+df_low_stratosphere <- read_table2("http://vortex.nsstc.uah.edu/data/msu/v6.1/tls/uahncdc_ls_6.1.txt")
+
+df_low_stratosphere <- df_low_stratosphere[1:which(df_low_stratosphere$Year %in% "Year")-1, ]
+
+df_low_stratosphere <- df_low_stratosphere %>%
+  mutate(
+    Date = ymd(paste(Year, Mo, 1, sep = "-")),
+    Year = year(Date),
+    Month = month(Date),
+    Month2 = month(Date, label = TRUE, abbr = FALSE)
+  ) %>%
+  select(Year, Month, Month2, Date, Globe) %>%
+  mutate_if(is.character, as.numeric) %>%
+  mutate(
+    Mean_stratosphere = rollmean(Globe, k = 12, align = "right", fill = NA),
+    Mean_stratosphere = round(Mean_stratosphere, 3)
+  )
+```
+
+```{r warning=FALSE, message=FALSE}
+#| echo: false
+
+av_globe <- df_low_stratosphere %>%
+  left_join(df_low_troposphere %>% select(Date, Mean_ltroposphere), by = "Date") %>%
+  left_join(df_mid_troposphere %>% select(Date, Mean_mtroposphere), by = "Date") %>%
+  left_join(df_tropopause %>% select(Date, Mean_tropopause), by = "Date") %>%
+  select(-Month2, -Globe) %>%
+  mutate(Average = rowMeans(select(., Mean_ltroposphere, Mean_mtroposphere, Mean_tropopause, Mean_stratosphere), na.rm = TRUE))
+
+```
+
+```{r}
+
+library(ggplot2)
+
+df_plot <- av_globe %>%
+  filter(Year >= 1980)
+
+ggplot(df_plot, aes(x = Date)) +
+  geom_line(aes(y = Mean_ltroposphere, color = "Lower Troposphere")) +
+  geom_line(aes(y = Mean_mtroposphere, color = "Mid Troposphere")) +
+  geom_line(aes(y = Mean_tropopause, color = "Tropopause")) +
+  geom_line(aes(y = Mean_stratosphere, color = "Lower Stratosphere")) +
+  geom_line(aes(y = Average, color = "Average"), size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") + # making a line through 0
+  scale_x_date(
+    breaks = seq(min(df_plot$Date), max(df_plot$Date), by = "2 years"),
+    labels = function(x) format(x, "%Y")  # format()-function shows the year in Date
+  ) + # Used AI to help me find scale_x_date() and how to use the arguments in it.
+   scale_y_continuous(
+    breaks = seq(-0.5, 1.5, by = 0.2)
+  ) +
+  labs(title = "Moving Average of Atmospheric Temperature",
+       x = "Year",
+       y = "Temperature (°C)",
+       color = "Mean:") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
